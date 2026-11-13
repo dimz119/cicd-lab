@@ -3,8 +3,6 @@ import datetime
 import psycopg
 import pytest
 
-from app.backfill import backfill
-
 pytestmark = pytest.mark.integration
 
 ORDER = {"user_id": "user-1", "book_title": "파이프라인 설계 입문", "quantity": 2}
@@ -119,37 +117,12 @@ def test_flag_can_be_turned_off_again_without_deploy(client, settings):
     assert "예상 배송일" not in page
 
 
-def insert_order_like_old_version(settings) -> int:
-    # 컬럼을 모르는 옛 버전은 estimated_delivery_date 없이 INSERT 한다.
-    # contract(NOT NULL) 뒤에는 이 INSERT가 거부된다.
+def test_insert_without_delivery_date_is_rejected_after_contract(settings, client):
+    # 컬럼을 모르는 옛 버전(v1.0.0)은 estimated_delivery_date 없이 INSERT 한다.
+    # contract 뒤에는 그 버전으로 롤백할 수 없다는 뜻이다.
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
-        try:
-            return conn.execute(
+        with pytest.raises(psycopg.errors.NotNullViolation):
+            conn.execute(
                 "INSERT INTO orders (user_id, book_title, quantity) "
-                "VALUES ('old-user', '옛 주문', 1) RETURNING id"
-            ).fetchone()[0]
-        except psycopg.errors.NotNullViolation:
-            pytest.skip("contract가 적용된 스키마에는 옛 버전의 주문이 들어갈 수 없다")
-
-
-def test_order_written_by_old_version_is_still_readable(client, settings):
-    order_id = insert_order_like_old_version(settings)
-
-    response = client.get(f"/orders/{order_id}")
-
-    assert response.status_code == 200
-    assert response.get_json()["estimated_delivery_date"]
-
-
-def test_backfill_fills_old_orders_in_batches(client, settings):
-    for _ in range(5):
-        insert_order_like_old_version(settings)
-
-    filled = backfill(settings.database_url, batch_size=2, out=lambda _: None)
-
-    assert filled == 5
-    with psycopg.connect(settings.database_url) as conn:
-        remaining = conn.execute(
-            "SELECT count(*) FROM orders WHERE estimated_delivery_date IS NULL"
-        ).fetchone()[0]
-    assert remaining == 0
+                "VALUES ('old-user', '옛 주문', 1)"
+            )

@@ -44,15 +44,6 @@ def parse_order(data: dict) -> dict:
     }
 
 
-def delivery_date_of(order: dict) -> datetime.date:
-    # 컬럼을 추가하기 전에 만들어졌거나 옛 버전이 만든 주문은 값이 NULL이다.
-    # backfill이 끝나고 NOT NULL로 바꾸기 전까지는 읽을 때 계산해서 메운다.
-    stored = order["estimated_delivery_date"]
-    if stored is not None:
-        return stored
-    return estimate_delivery_date(order["created_at"].date(), order["shipping_method"])
-
-
 def serialize_order(order: dict) -> dict:
     return {
         "id": order["id"],
@@ -61,7 +52,7 @@ def serialize_order(order: dict) -> dict:
         "quantity": order["quantity"],
         "shipping_method": order["shipping_method"],
         "created_at": order["created_at"].isoformat(),
-        "estimated_delivery_date": delivery_date_of(order).isoformat(),
+        "estimated_delivery_date": order["estimated_delivery_date"].isoformat(),
     }
 
 
@@ -182,7 +173,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         return render_template(
             "complete.html",
             order=order,
-            estimated_delivery_date=delivery_date_of(order) if show_delivery else None,
+            estimated_delivery_date=order["estimated_delivery_date"] if show_delivery else None,
         )
 
     return app
