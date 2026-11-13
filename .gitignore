@@ -9,3 +9,4 @@ __pycache__/
 
 # 비밀 값은 리포에 넣지 않는다.
 .env.local
+*.csv

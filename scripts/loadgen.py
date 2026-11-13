@@ -3,6 +3,7 @@
 
     python3 scripts/loadgen.py --url http://localhost:8080 --requests 400
     python3 scripts/loadgen.py --url http://localhost:8080 --watch
+    python3 scripts/loadgen.py --url http://localhost:8080 --watch --csv canary.csv
 
 표준 라이브러리만 쓴다.
 실제 서비스라면 이 숫자는 모니터링 시스템에서 가져온다.
@@ -113,7 +114,7 @@ def format_table(stats: dict[str, Stats]) -> str:
     return "\n".join(lines)
 
 
-def watch(base_url: str, rps: float) -> None:
+def watch(base_url: str, rps: float, csv_path: str | None = None) -> None:
     rng = random.Random()
     order_ids: list[int] = []
     print(f"{base_url} 로 초당 약 {rps:.0f}건을 보낸다. Ctrl-C로 멈춘다.")
@@ -127,6 +128,16 @@ def watch(base_url: str, rps: float) -> None:
             time.sleep(1 / rps)
         print(f"\n{time.strftime('%H:%M:%S')}  최근 5초")
         print(format_table(stats), flush=True)
+        if csv_path:
+            # 그래프를 그릴 수 있게 5초 구간마다 한 줄씩 남긴다.
+            with open(csv_path, "a", encoding="utf-8") as file:
+                if file.tell() == 0:
+                    file.write("time,color,version,requests,error_rate,p95_ms\n")
+                for color, entry in sorted(stats.items()):
+                    file.write(
+                        f"{time.strftime('%H:%M:%S')},{color},{entry.version},"
+                        f"{entry.count},{entry.error_rate:.4f},{entry.p95_ms:.1f}\n"
+                    )
 
 
 def main() -> int:
@@ -135,12 +146,13 @@ def main() -> int:
     parser.add_argument("--requests", type=int, default=400)
     parser.add_argument("--watch", action="store_true", help="멈출 때까지 5초마다 집계를 출력")
     parser.add_argument("--rps", type=float, default=20)
+    parser.add_argument("--csv", help="--watch의 구간별 집계를 이 파일에 CSV로 덧붙인다")
     args = parser.parse_args()
 
     base_url = args.url.rstrip("/")
     if args.watch:
         try:
-            watch(base_url, args.rps)
+            watch(base_url, args.rps, args.csv)
         except KeyboardInterrupt:
             print()
         return 0
