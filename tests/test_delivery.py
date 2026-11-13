@@ -10,13 +10,14 @@ SATURDAY = datetime.date(2026, 11, 14)
 
 
 @pytest.mark.parametrize(
-    ("ordered_on", "shipping_method", "expected"),
+    ("ordered_on", "shipping_method", "region", "expected"),
     [
-        pytest.param(MONDAY, "standard", datetime.date(2026, 11, 12), id="standard-3-days"),
-        pytest.param(MONDAY, "express", datetime.date(2026, 11, 10), id="express-next-day"),
-        pytest.param(THURSDAY, "standard", datetime.date(2026, 11, 16), id="standard-skips-sunday"),
-        pytest.param(SATURDAY, "express", datetime.date(2026, 11, 16), id="express-skips-sunday"),
+        pytest.param(MONDAY, "standard", "metro", datetime.date(2026, 11, 12), id="standard-metro"),
+        pytest.param(MONDAY, "standard", "remote", datetime.date(2026, 11, 14), id="remote"),
+        pytest.param(MONDAY, "express", "metro", datetime.date(2026, 11, 10), id="express-metro"),
+        pytest.param(THURSDAY, "standard", "metro", datetime.date(2026, 11, 16), id="skips-sunday"),
+        pytest.param(SATURDAY, "express", "metro", datetime.date(2026, 11, 16), id="sunday-2"),
     ],
 )
-def test_estimate_delivery_date(ordered_on, shipping_method, expected):
-    assert estimate_delivery_date(ordered_on, shipping_method) == expected
+def test_estimate_delivery_date(ordered_on, shipping_method, region, expected):
+    assert estimate_delivery_date(ordered_on, shipping_method, region) == expected
