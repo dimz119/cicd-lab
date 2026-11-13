@@ -4,9 +4,13 @@ SELECT * 를 쓰지 않고 컬럼을 하나씩 적는다.
 그래야 스키마에 컬럼이 늘거나 줄어도 이 버전의 코드가 영향을 받지 않는다.
 """
 
+import datetime
+
 import psycopg
 
-ORDER_COLUMNS = "id, user_id, book_title, quantity, shipping_method, created_at"
+ORDER_COLUMNS = (
+    "id, user_id, book_title, quantity, shipping_method, created_at, estimated_delivery_date"
+)
 
 
 def create_order(
@@ -16,14 +20,16 @@ def create_order(
     book_title: str,
     quantity: int,
     shipping_method: str,
+    estimated_delivery_date: datetime.date,
 ) -> dict:
     return conn.execute(
         f"""
-        INSERT INTO orders (user_id, book_title, quantity, shipping_method)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO orders
+            (user_id, book_title, quantity, shipping_method, estimated_delivery_date)
+        VALUES (%s, %s, %s, %s, %s)
         RETURNING {ORDER_COLUMNS}
         """,
-        (user_id, book_title, quantity, shipping_method),
+        (user_id, book_title, quantity, shipping_method, estimated_delivery_date),
     ).fetchone()
 
 

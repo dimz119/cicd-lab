@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import time
@@ -6,6 +7,7 @@ from flask import Flask, g, jsonify, redirect, render_template, request, url_for
 
 from app import db, store
 from app.config import Settings, load_settings
+from app.delivery import estimate_delivery_date
 from app.flags import FlagService, load_registry
 
 SHIPPING_METHODS = ("standard", "express")
@@ -42,6 +44,15 @@ def parse_order(data: dict) -> dict:
     }
 
 
+def delivery_date_of(order: dict) -> datetime.date:
+    # 컬럼을 추가하기 전에 만들어졌거나 옛 버전이 만든 주문은 값이 NULL이다.
+    # backfill이 끝나고 NOT NULL로 바꾸기 전까지는 읽을 때 계산해서 메운다.
+    stored = order["estimated_delivery_date"]
+    if stored is not None:
+        return stored
+    return estimate_delivery_date(order["created_at"].date(), order["shipping_method"])
+
+
 def serialize_order(order: dict) -> dict:
     return {
         "id": order["id"],
@@ -50,6 +61,7 @@ def serialize_order(order: dict) -> dict:
         "quantity": order["quantity"],
         "shipping_method": order["shipping_method"],
         "created_at": order["created_at"].isoformat(),
+        "estimated_delivery_date": delivery_date_of(order).isoformat(),
     }
 
 
@@ -140,8 +152,11 @@ def create_app(settings: Settings | None = None) -> Flask:
         data = parse_order(payload if payload is not None else request.form)
         log.debug(json.dumps({"event": "create_order", **data}, ensure_ascii=False))
 
+        # 새 컬럼에 쓰는 것은 플래그와 상관없이 항상 한다.
+        # 플래그가 가리는 것은 화면에 보여 주는 부분뿐이다.
+        estimated = estimate_delivery_date(datetime.date.today(), data["shipping_method"])
         with db.connect(settings.database_url) as conn:
-            order = store.create_order(conn, **data)
+            order = store.create_order(conn, **data, estimated_delivery_date=estimated)
 
         if payload is not None:
             return jsonify(serialize_order(order)), 201
@@ -162,6 +177,12 @@ def create_app(settings: Settings | None = None) -> Flask:
             order = store.get_order(conn, order_id)
         if order is None:
             return jsonify(error="주문을 찾을 수 없다"), 404
-        return render_template("complete.html", order=order)
+        # 배포는 이미 됐고, 출시는 이 플래그가 결정한다.
+        show_delivery = flags.is_enabled("show_estimated_delivery", order["user_id"])
+        return render_template(
+            "complete.html",
+            order=order,
+            estimated_delivery_date=delivery_date_of(order) if show_delivery else None,
+        )
 
     return app
