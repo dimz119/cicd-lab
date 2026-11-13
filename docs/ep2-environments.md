@@ -53,7 +53,7 @@ dev(`LOG_LEVEL=DEBUG`)에는 `create_order` 이벤트와 health check 로그까�
 **4. 비밀 값은 리포에 없다**
 
 ```bash
-git grep -n "DB_PASSWORD"
+git grep -n "DB_PASSWORD" -- compose.yml config/ .github/
 cat .env.local.example
 curl -s localhost:8080/info
 ```
