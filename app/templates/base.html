@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>온라인 서점 · 주문</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; color: #1f2933; }
+    h1 { font-size: 1.5rem; }
+    label { display: block; margin-top: .75rem; font-size: .9rem; }
+    input, select { width: 100%; padding: .5rem; margin-top: .25rem; box-sizing: border-box; font-size: 1rem; }
+    button { margin-top: 1.25rem; padding: .6rem 1.2rem; font-size: 1rem; }
+    dl { display: grid; grid-template-columns: 8rem 1fr; gap: .5rem 1rem; }
+    dt { color: #616e7c; }
+    dd { margin: 0; }
+    .delivery { margin-top: 1.25rem; padding: .9rem 1rem; border-radius: .5rem; background: #e3f8e9; font-size: 1.1rem; }
+    footer { margin-top: 2.5rem; padding-top: .75rem; border-top: 1px solid #cbd2d9; font: .8rem ui-monospace, monospace; color: #616e7c; }
+    .color { display: inline-block; padding: 0 .5rem; border-radius: .25rem; color: #fff; }
+    .color-blue { background: #2563eb; }
+    .color-green { background: #16a34a; }
+    .color-none { background: #616e7c; }
+  </style>
+</head>
+<body>
+  {% block content %}{% endblock %}
+  <footer>
+    env={{ settings.app_env }} · version={{ settings.app_version }} ·
+    <span class="color color-{{ settings.app_color }}">{{ settings.app_color }}</span>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>도서 주문</h1>
+<form method="post" action="{{ url_for('create_order') }}">
+  <label>사용자 ID
+    <input name="user_id" value="user-1" required>
+  </label>
+  <label>도서
+    <input name="book_title" value="파이프라인 설계 입문" required>
+  </label>
+  <label>수량
+    <input name="quantity" type="number" min="1" max="99" value="1" required>
+  </label>
+  <label>배송 방법
+    <select name="shipping_method">
+      <option value="standard">일반 배송</option>
+      <option value="express">빠른 배송</option>
+    </select>
+  </label>
+  <button type="submit">주문하기</button>
+</form>
+{% endblock %}

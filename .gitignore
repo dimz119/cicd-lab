@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# 배포 상태(어느 색이 live인지, nginx 설정)는 환경의 것이지 코드의 것이 아니다.
+.deploy/
+
+# 비밀 값은 리포에 넣지 않는다.
+.env.local

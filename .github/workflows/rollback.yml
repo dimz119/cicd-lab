@@ -1,0 +1,68 @@
+name: rollback
+
+# 이미 만들어 둔 이미지를 다시 배포한다.
+# test도 build도 다시 하지 않는다. 그래서 빠르고, 결과가 예측 가능하다.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "되돌릴 이미지 태그 (커밋 SHA 앞 7자리 또는 production-previous)"
+        required: true
+        default: production-previous
+
+permissions:
+  contents: read
+
+jobs:
+  rollback-production:
+    runs-on: ubuntu-latest
+    environment: production
+    # 진행 중인 배포와 겹치지 않게 같은 그룹을 쓴다.
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ inputs.tag }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        run: echo "repo=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: 되돌릴 이미지 확인
+        id: target
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+        run: |
+          # 태그가 가리키는 digest를 먼저 고정한다.
+          # 아래에서 production-previous 태그가 움직여도 대상이 바뀌지 않는다.
+          DIGEST="$(docker buildx imagetools inspect "$REPO:$TAG" --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "image=$REPO@$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "되돌릴 이미지: $REPO:$TAG ($DIGEST)"
+      - name: 현재 운영 버전 준비 (실습용)
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+        run: |
+          docker pull --quiet "$REPO:production"
+          ./scripts/deploy.sh production "$REPO:production"
+      - name: Rollback
+        run: ./scripts/deploy.sh production "${{ steps.target.outputs.image }}"
+      - name: 배포 상태
+        if: always()
+        run: |
+          ./scripts/status.sh production
+          curl --silent http://localhost:8080/info || true
+      - name: production 태그 이동
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+        run: |
+          docker buildx imagetools create --tag "$REPO:production-previous" "$REPO:production"
+          docker buildx imagetools create --tag "$REPO:production" "${{ steps.target.outputs.image }}"

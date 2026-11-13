@@ -1,0 +1,179 @@
+name: pipeline
+
+# PR에서는 test와 build까지만 돈다.
+# main에 머지되면 같은 파이프라인이 staging, production까지 이어진다.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orders
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: orders_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orders -d orders_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      # 싸고 빠른 검사를 앞에 둔다.
+      - name: Lint
+        run: ruff check .
+      - name: Feature flag 검사
+        run: python scripts/check_flags.py
+      - name: Test
+        run: pytest
+        env:
+          TEST_DATABASE_URL: postgresql://orders:test@localhost:5432/orders_test
+          # DB가 없으면 건너뛰지 말고 실패한다.
+          REQUIRE_DB: "1"
+
+  # 빌드는 여기서 한 번만 한다.
+  # 뒤의 단계는 이 job이 만든 이미지를 그대로 받아 쓴다.
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      repo: ${{ steps.meta.outputs.repo }}
+      image: ${{ steps.ref.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: meta
+        run: |
+          # 레지스트리 경로는 소문자여야 한다.
+          echo "repo=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # PR에서는 빌드가 되는지만 확인하고 올리지 않는다.
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.repo }}:${{ steps.meta.outputs.version }}
+          build-args: APP_VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - id: ref
+        if: github.event_name == 'push'
+        run: |
+          # 태그는 다른 이미지로 옮겨 붙을 수 있지만 digest는 내용 그 자체다.
+          # 뒤의 단계는 digest로 고정된 이 이미지를 받는다.
+          echo "image=${{ steps.meta.outputs.repo }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### 빌드한 이미지"
+            echo "\`${{ steps.meta.outputs.repo }}:${{ steps.meta.outputs.version }}\`"
+            echo "\`${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+      # 같은 이름의 secret이지만 environment마다 값이 다르다.
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # 이 실습에서는 배포 대상이 runner 자신이다.
+      # 실제로는 deploy.sh 안의 명령이 Kubernetes, ECS 등을 향한다.
+      - name: Deploy
+        run: ./scripts/deploy.sh staging "$IMAGE"
+      - name: 배포 상태
+        if: always()
+        run: |
+          ./scripts/status.sh staging
+          curl --silent http://localhost:8082/info || true
+      - name: 실패 시 로그
+        if: failure()
+        run: docker compose -p orders-staging logs --tail 50
+
+  deploy-production:
+    needs: [build, deploy-staging]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # production environment에 Required reviewers를 걸어 두면 여기서 승인을 기다린다.
+    environment: production
+    # production 배포는 한 번에 하나만 돈다.
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REPO: ${{ needs.build.outputs.repo }}
+      IMAGE: ${{ needs.build.outputs.image }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # runner는 매번 새 기계라 '지금 운영 중인 버전'이 없다.
+      # canary는 비교할 기존 버전이 있어야 하므로 먼저 현재 운영 버전을 올린다.
+      - name: 현재 운영 버전 준비 (실습용)
+        run: |
+          if docker pull --quiet "$REPO:production"; then
+            ./scripts/deploy.sh production "$REPO:production"
+          else
+            echo "production 태그가 아직 없다. 첫 배포로 진행한다."
+          fi
+      - name: Deploy (canary)
+        run: ./scripts/deploy.sh production "$IMAGE" --strategy canary
+      - name: 배포 상태
+        if: always()
+        run: |
+          ./scripts/status.sh production
+          curl --silent http://localhost:8080/info || true
+      - name: 실패 시 로그
+        if: failure()
+        run: docker compose -p orders-production logs --tail 50
+      # 배포가 끝난 이미지에 production 태그를 붙인다.
+      # 직전 운영 버전은 production-previous로 남겨 롤백 대상으로 쓴다.
+      - name: production 태그 이동
+        run: |
+          docker buildx imagetools create --tag "$REPO:production-previous" "$REPO:production" \
+            || echo "이전 production 태그가 없다."
+          docker buildx imagetools create --tag "$REPO:production" "$IMAGE"

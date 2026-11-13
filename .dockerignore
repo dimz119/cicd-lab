@@ -1,0 +1,10 @@
+.git
+.venv
+.deploy
+.github
+docs
+tests
+scripts
+config
+**/__pycache__
+.env.local

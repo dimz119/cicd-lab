@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>주문이 완료되었습니다</h1>
+<dl>
+  <dt>주문 번호</dt><dd>#{{ order.id }}</dd>
+  <dt>도서</dt><dd>{{ order.book_title }}</dd>
+  <dt>수량</dt><dd>{{ order.quantity }}권</dd>
+  <dt>배송 방법</dt><dd>{{ "빠른 배송" if order.shipping_method == "express" else "일반 배송" }}</dd>
+</dl>
+<p><a href="{{ url_for('index') }}">다시 주문하기</a></p>
+{% endblock %}
