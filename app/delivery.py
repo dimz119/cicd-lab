@@ -4,7 +4,7 @@ import datetime
 
 # 배송 방법별로 주문일에서 며칠 뒤에 도착하는지.
 LEAD_DAYS = {
-    "standard": 3,
+    "standard": 2,
     "express": 1,
 }
 
