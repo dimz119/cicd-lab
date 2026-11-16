@@ -9,7 +9,8 @@ import datetime
 import psycopg
 
 ORDER_COLUMNS = (
-    "id, user_id, book_title, quantity, shipping_method, created_at, estimated_delivery_date"
+    "id, user_id, title AS book_title, quantity, shipping_method, created_at, "
+    "estimated_delivery_date"
 )
 
 
@@ -25,7 +26,7 @@ def create_order(
     return conn.execute(
         f"""
         INSERT INTO orders
-            (user_id, book_title, quantity, shipping_method, estimated_delivery_date)
+            (user_id, title, quantity, shipping_method, estimated_delivery_date)
         VALUES (%s, %s, %s, %s, %s)
         RETURNING {ORDER_COLUMNS}
         """,

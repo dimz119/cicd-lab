@@ -123,6 +123,6 @@ def test_insert_without_delivery_date_is_rejected_after_contract(settings, clien
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
         with pytest.raises(psycopg.errors.NotNullViolation):
             conn.execute(
-                "INSERT INTO orders (user_id, book_title, quantity) "
+                "INSERT INTO orders (user_id, title, quantity) "
                 "VALUES ('old-user', '옛 주문', 1)"
             )
