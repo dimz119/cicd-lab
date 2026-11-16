@@ -4,7 +4,7 @@
 #   ./scripts/build.sh              현재 커밋(HEAD)으로 빌드
 #   ./scripts/build.sh v1.0.0       태그나 브랜치로 빌드
 #   ./scripts/build.sh worktree     커밋하지 않은 작업 디렉터리로 빌드
-#   ./scripts/build.sh demo/bad-release v1.3.0-bad    버전 이름을 직접 지정
+#   ./scripts/build.sh demo/ep3-bad-release v1.3.0-bad    버전 이름을 직접 지정
 #
 # 결과 이미지: orders:<버전>
 set -euo pipefail

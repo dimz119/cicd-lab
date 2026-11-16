@@ -135,6 +135,34 @@ contract 마이그레이션이 든 v1.2.0을 배포한다.
 
 `estimated_delivery_date`가 `not null`이다. 터미널 2의 에러율은 처음부터 끝까지 0%였다.
 
+## GitHub에서 실습 — `demo/ep5-rename-column`
+
+expand / contract로 나누지 않고 컬럼 이름을 한 번에 바꾸는 PR이다. 코드와 마이그레이션을 함께 고쳤으니 문제없어 보인다.
+
+```bash
+git diff main demo/ep5-rename-column
+gh pr create --base main --head demo/ep5-rename-column --fill
+gh pr checks --watch
+gh pr merge demo/ep5-rename-column --squash
+gh run watch
+```
+
+- `test` 통과: 테스트 DB는 새 스키마, 코드도 새 코드다. 둘은 맞는다.
+- `deploy-staging` 통과: 로그에 `적용: 0005_expand_rename_book_title_to_title`. 이 순간 떠 있던 기존 버전은 깨졌지만, 새 버전으로 곧바로 전환되고 smoke test는 새 버전만 보므로 드러나지 않는다.
+- `deploy-production`: canary 10% 표에서 **기존 버전**의 에러율이 100%다. 사용자의 90%가 실패하고 있다. `판정: 중단 — baseline 에러율 100.0% > 상한 5.0%`.
+- 스크립트가 트래픽을 기존 버전 100%로 되돌리지만 복구되지 않는다. 코드는 되돌려도 DB는 이미 바뀌었다.
+
+마이그레이션이 적용된 시점부터 새 버전이 100%가 될 때까지, 옛 코드는 없는 컬럼을 찾는다. 배포는 순간이 아니라 구간이고, 그 구간에는 두 버전이 함께 떠 있다.
+
+안전한 방법은 이 리포의 v1.1.0 → v1.2.0과 같다: `title` 컬럼 추가(expand) → 양쪽에 쓰기 → backfill → 읽기 전환 → `book_title` 삭제(contract).
+
+정리:
+
+```bash
+git switch main && git pull
+git revert --no-edit HEAD && git push
+```
+
 ## 짚을 점
 
 - 순서의 원칙: **DB를 먼저 넓히고, 코드를 바꾸고, 마지막에 DB를 좁힌다.** 각 시점에 떠 있는 모든 버전의 코드가 그 시점의 스키마와 호환된다.

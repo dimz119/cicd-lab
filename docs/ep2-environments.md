@@ -81,6 +81,38 @@ docker run --rm -e APP_ENV=prod orders:v1.1.0 python -m app.migrate status
 
 staging에서만 켜진다. 플래그 정의는 리포(`flags.json`)에, 켜짐/꺼짐은 각 환경의 DB에 있다. EP4에서 이어진다.
 
+## GitHub에서 실습 — `demo/ep2-missing-config`
+
+새 설정 `SUPPORT_EMAIL`을 추가하면서 dev와 staging에는 넣고 production에는 빠뜨린 PR이다.
+
+```bash
+git diff main demo/ep2-missing-config --stat
+git diff main demo/ep2-missing-config -- config/
+gh pr create --base main --head demo/ep2-missing-config --fill
+gh pr checks --watch
+gh pr merge demo/ep2-missing-config --squash
+gh run watch
+```
+
+- `test` 통과: 테스트는 설정을 직접 만들어 넣으므로 환경 파일의 누락을 모른다.
+- `deploy-staging` 통과: staging에는 값이 있다. "staging에서는 됐는데"가 만들어지는 순간이다.
+- `deploy-production` 실패: Deploy step의 "1/4 마이그레이션"에서 `설정 오류: SUPPORT_EMAIL: 값이 없다`. 새 버전은 요청을 받기 전에 죽었고 `live는 그대로다`. `production` 태그도 움직이지 않는다.
+
+고치는 방법은 둘이다. 빠진 값을 넣어 roll-forward 하거나, 되돌린다.
+
+```bash
+git switch main && git pull
+
+# roll-forward: 빠진 값을 넣는다
+echo "SUPPORT_EMAIL=support@bookstore.example.com" >> config/production.env
+git commit -am "fix: production에 SUPPORT_EMAIL 추가" && git push
+
+# 또는 되돌리기
+git revert --no-edit HEAD && git push
+```
+
+다음 편 실습을 위해 최종적으로는 main에서 이 변경을 되돌려 둔다.
+
 ## 짚을 점
 
 - "staging에서는 됐는데"를 줄이려면 다른 것을 최소로 줄이고, 그 목록을 `config/`에서 한눈에 볼 수 있게 한다.

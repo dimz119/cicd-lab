@@ -27,13 +27,14 @@ uv pip install -r requirements-dev.txt
 cp .env.local.example .env.local
 
 # 3. CI의 test 단계와 같은 검사 (lint → flag 검사 → 테스트)
+#    가상환경을 켜지 않아도 .venv를 직접 쓴다. 없으면 만든다.
 ./scripts/test.sh
 
 # 4. 시연에 쓸 이미지 4개
 ./scripts/build.sh v1.0.0
 ./scripts/build.sh v1.1.0
 ./scripts/build.sh v1.2.0
-./scripts/build.sh demo/bad-release v1.3.0-bad
+./scripts/build.sh demo/ep3-bad-release v1.3.0-bad
 ```
 
 ## 버전
@@ -45,7 +46,7 @@ cp .env.local.example .env.local
 | `orders:v1.0.0` | 주문 생성·조회만 있는 기존 버전 | `orders`, `feature_flags` 테이블 |
 | `orders:v1.1.0` | 예상 배송일 기능. 컬럼에 항상 쓰고, 화면 표시는 플래그 뒤에 있다 | **expand**: `estimated_delivery_date` 컬럼 추가 (NULL 허용) |
 | `orders:v1.2.0` | NULL을 메우던 임시 코드 제거 | **contract**: `NOT NULL` (수동 적용) |
-| `orders:v1.3.0-bad` | `demo/bad-release` 브랜치. 빠른 배송 주문이 500으로 실패한다. 테스트는 통과한다 | 없음 |
+| `orders:v1.3.0-bad` | `demo/ep3-bad-release` 브랜치. 빠른 배송 주문이 500으로 실패한다. 테스트는 통과한다 | 없음 |
 
 ## 로컬 환경
 
@@ -84,7 +85,43 @@ main:  test ──▶ build(GHCR에 push) ──▶ deploy-staging ──▶ [�
 ```
 
 deploy job은 build job이 만든 이미지를 digest로 받아 **runner 안에서** `deploy.sh`를 실행한다. runner는 job이 끝나면 사라지므로 "배포된 환경"이 남지는 않는다. 파이프라인의 흐름(같은 아티팩트, 승인, canary 판정, 태그 이동)을 보여 주는 용도다.
-운영 중인 버전은 GHCR의 `production` 태그가 가리킨다. 직전 버전은 `production-previous`다.
+각 환경에 떠 있는 버전은 GHCR의 `staging`, `production` 태그가 가리킨다. 직전 운영 버전은 `production-previous`다.
+deploy job은 먼저 이 태그의 이미지를 올리고 contract 마이그레이션까지 적용해 "지금 환경의 상태"를 재현한 다음, 그 위에 새 이미지를 배포한다.
+
+## 편별 실습 브랜치 (브랜치 하나, PR 하나)
+
+편마다 미리 만들어 둔 브랜치를 PR로 올리고, 파이프라인이 어디서 어떻게 반응하는지 본다.
+
+| 편 | 브랜치 | 바꾼 것 | 파이프라인에서 일어나는 일 |
+| --- | --- | --- | --- |
+| EP1 | `demo/ep1-pipeline` | 주문 화면에 안내 문구 한 줄 | PR은 test·build만. 머지하면 staging → 승인 → production까지 같은 digest로 통과 |
+| EP1 | `demo/ep1-broken-test` | 일반 배송 예상일을 3일 → 2일 | `test`에서 멈춤. `build`는 시작도 안 함 (머지하지 않는다) |
+| EP2 | `demo/ep2-missing-config` | `SUPPORT_EMAIL` 설정 추가. dev·staging에는 넣고 production에는 빠뜨림 | 테스트와 staging은 통과. `deploy-production`이 "설정 오류: SUPPORT_EMAIL"로 실패. live는 그대로 |
+| EP3 | `demo/ep3-bad-release` | 배송일 계산 변경. 빠른 배송 주문이 500 | 테스트, staging, smoke test 통과. canary 10%에서 에러율 초과로 자동 중단 |
+| EP4 | `demo/ep4-unregistered-flag` | 새 플래그 `show_tracking_link`를 코드에서만 쓰고 `flags.json`에 등록하지 않음 | `test`의 "Feature flag 검사"에서 멈춤. 등록하는 커밋을 더하면 통과 |
+| EP5 | `demo/ep5-rename-column` | `book_title` → `title` 컬럼 이름을 마이그레이션 한 번으로 변경 | 테스트와 staging은 통과. production canary에서 **기존 버전** 에러율 100%로 중단. 되돌려도 복구되지 않음 |
+| EP6 | `demo/ep6-wrong-date` | 예상 배송일 표기의 월·일이 뒤바뀜 | 전부 통과해 production까지 나감. `rollback` 워크플로로 되돌리고 revert로 roll-forward |
+
+공통 순서:
+
+```bash
+# 1. PR을 올리고 test·build 결과를 본다
+gh pr create --base main --head demo/ep3-bad-release --fill
+gh pr checks --watch
+
+# 2. 머지하면 main의 파이프라인이 staging, production으로 이어진다
+gh pr merge demo/ep3-bad-release --squash
+gh run watch          # deploy-production은 Actions 화면에서 승인해야 시작한다
+
+# 3. 확인이 끝나면 main을 되돌린다 (이것도 파이프라인을 한 바퀴 돈다)
+git switch main && git pull
+git revert --no-edit HEAD && git push
+```
+
+- 한 번에 하나씩 한다. 다음 브랜치는 main을 되돌린 뒤에 올린다.
+- 머지할 때 `--delete-branch`를 붙이지 않는다. 브랜치를 남겨 둬야 다시 쓸 수 있다.
+- 같은 실습을 다시 하려면 새 브랜치에 커밋을 옮겨 PR을 만든다: `git switch -c retry/ep3 main && git cherry-pick demo/ep3-bad-release && git push -u origin retry/ep3`
+- 편별 문서의 "GitHub에서 실습" 절에 볼 곳과 기대 결과가 있다.
 
 ## 촬영 전 준비
 

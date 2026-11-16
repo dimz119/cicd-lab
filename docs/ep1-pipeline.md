@@ -40,46 +40,43 @@ curl -s localhost:8080/info
 
 `version`은 같고 `env`만 다르다. 환경마다 다시 빌드했다면 이 보장이 없다.
 
-## 시연 2 — GitHub Actions
+## GitHub에서 실습
 
-준비: 리포를 GitHub에 올리고 `./scripts/setup-github.sh`를 한 번 실행한다.
+**1. `demo/ep1-pipeline` — PR에서는 test와 build만 돈다**
 
-1. **PR에서는 test와 build만 돈다.**
+```bash
+gh pr create --base main --head demo/ep1-pipeline --fill
+gh pr checks --watch
+```
 
-   ```bash
-   git switch -c demo/ep1-readme
-   echo "" >> README.md
-   git commit -am "docs: 파이프라인 시연" && git push -u origin demo/ep1-readme
-   gh pr create --fill
-   ```
+Actions 화면에서 `deploy-staging`, `deploy-production`이 건너뛰어진 것을 보여 준다. `build`는 이미지를 만들기만 하고 올리지 않는다.
 
-   Actions 탭에서 `deploy-staging`, `deploy-production`이 건너뛰어진 것을 보여 준다.
+**2. 머지하면 같은 파이프라인이 끝까지 이어진다**
 
-2. **머지하면 같은 파이프라인이 끝까지 이어진다.**
+```bash
+gh pr merge demo/ep1-pipeline --squash
+gh run watch
+```
 
-   ```bash
-   gh pr merge --squash --delete-branch
-   gh run watch
-   ```
+- `build` job의 Summary: 이미지 태그와 digest
+- `deploy-staging`의 Deploy 로그 첫 줄 `[staging] ghcr.io/...@sha256:...` 과 `deploy-production`의 digest가 같다
+- `deploy-production`은 "Review deployments" 승인을 기다린다. 승인하면 canary 단계가 돈다
+- 끝나면 GHCR Packages 화면에서 `staging`, `production` 태그가 이 이미지로 옮겨졌다
 
-   - `build` job의 Summary: 이미지 태그와 digest
-   - `deploy-staging` 로그의 `[staging] ghcr.io/...@sha256:...` 과 `deploy-production` 로그의 digest가 같다
-   - `deploy-production`은 "Review deployments" 승인을 기다린다. 승인하면 canary 단계가 돈다
+이 변경은 문제가 없으므로 되돌리지 않아도 된다.
 
-3. **앞 단계가 실패하면 뒤 단계는 시작하지 않는다.**
+**3. `demo/ep1-broken-test` — 앞 단계가 실패하면 뒤 단계는 시작하지 않는다**
 
-   ```bash
-   git switch -c demo/ep1-lint
-   echo "import os" >> app/delivery.py
-   git commit -am "demo: lint 실패" && git push -u origin demo/ep1-lint
-   gh pr create --fill
-   ```
+```bash
+gh pr create --base main --head demo/ep1-broken-test --fill
+gh pr checks --watch
+```
 
-   `test`의 Lint step에서 멈추고 `build`는 시작도 하지 않는다. 확인 후 PR을 닫는다.
+`test`의 Test step에서 `test_estimate_delivery_date` 2개가 실패한다. `build`는 시작도 하지 않는다. 머지하지 않고 닫는다.
 
-   ```bash
-   gh pr close --delete-branch demo/ep1-lint && git switch main
-   ```
+```bash
+gh pr close demo/ep1-broken-test
+```
 
 ## 짚을 점
 

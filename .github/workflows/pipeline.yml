@@ -101,18 +101,30 @@ jobs:
     environment: staging
     permissions:
       contents: read
-      packages: read
+      packages: write
     env:
+      REPO: ${{ needs.build.outputs.repo }}
       IMAGE: ${{ needs.build.outputs.image }}
       # 같은 이름의 secret이지만 environment마다 값이 다르다.
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
     steps:
       - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # runner는 매번 새 기계라 '지금 staging에 떠 있는 버전'도, 그 DB도 없다.
+      # 직전에 배포된 버전을 올리고 이미 적용돼 있던 contract까지 적용해 그 상태를 재현한다.
+      - name: 현재 staging 상태 준비 (실습용)
+        run: |
+          if docker pull --quiet "$REPO:staging"; then
+            ./scripts/deploy.sh staging "$REPO:staging"
+            ./scripts/run.sh staging migrate up --allow-contract
+          else
+            echo "staging 태그가 아직 없다. 첫 배포로 진행한다."
+          fi
       # 이 실습에서는 배포 대상이 runner 자신이다.
       # 실제로는 deploy.sh 안의 명령이 Kubernetes, ECS 등을 향한다.
       - name: Deploy
@@ -125,6 +137,8 @@ jobs:
       - name: 실패 시 로그
         if: failure()
         run: docker compose -p orders-staging logs --tail 50
+      - name: staging 태그 이동
+        run: docker buildx imagetools create --tag "$REPO:staging" "$IMAGE"
 
   deploy-production:
     needs: [build, deploy-staging]
@@ -151,12 +165,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # runner는 매번 새 기계라 '지금 운영 중인 버전'이 없다.
-      # canary는 비교할 기존 버전이 있어야 하므로 먼저 현재 운영 버전을 올린다.
-      - name: 현재 운영 버전 준비 (실습용)
+      # canary는 비교할 기존 버전이 있어야 하므로 먼저 현재 운영 상태를 재현한다.
+      - name: 현재 production 상태 준비 (실습용)
         run: |
           if docker pull --quiet "$REPO:production"; then
             ./scripts/deploy.sh production "$REPO:production"
+            ./scripts/run.sh production migrate up --allow-contract
           else
             echo "production 태그가 아직 없다. 첫 배포로 진행한다."
           fi

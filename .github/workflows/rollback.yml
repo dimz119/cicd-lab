@@ -47,12 +47,13 @@ jobs:
           DIGEST="$(docker buildx imagetools inspect "$REPO:$TAG" --format '{{json .Manifest}}' | jq -r .digest)"
           echo "image=$REPO@$DIGEST" >> "$GITHUB_OUTPUT"
           echo "되돌릴 이미지: $REPO:$TAG ($DIGEST)"
-      - name: 현재 운영 버전 준비 (실습용)
+      - name: 현재 production 상태 준비 (실습용)
         env:
           REPO: ${{ steps.meta.outputs.repo }}
         run: |
           docker pull --quiet "$REPO:production"
           ./scripts/deploy.sh production "$REPO:production"
+          ./scripts/run.sh production migrate up --allow-contract
       - name: Rollback
         run: ./scripts/deploy.sh production "${{ steps.target.outputs.image }}"
       - name: 배포 상태

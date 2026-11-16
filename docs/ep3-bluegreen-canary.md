@@ -75,7 +75,7 @@ green에는 v1.1.0이 떠 있다. 비율만 바꾼다.
 `v1.3.0-bad`는 테스트와 smoke test를 통과하지만 빠른 배송 주문에서 500을 낸다.
 
 ```bash
-git diff v1.2.0 demo/bad-release -- app/delivery.py
+git diff v1.2.0 demo/ep3-bad-release -- app/delivery.py
 ./scripts/deploy.sh production orders:v1.3.0-bad --strategy canary
 ```
 
@@ -96,4 +96,25 @@ git diff v1.2.0 demo/bad-release -- app/delivery.py
 - canary는 영향 범위를 비율로 제한한다. 대신 두 버전이 동시에 트래픽을 받으므로 서로 호환돼야 한다 (EP5).
 - 판정 기준은 `canary_check.py`의 기본값이다: 에러율은 baseline + 2%p, p95는 baseline의 2배(최소 200ms), 표본 20건 미만이면 진행하지 않는다.
 - 실습의 지표는 `loadgen.py`가 만든 합성 트래픽을 응답 헤더(`X-App-Color`)로 나눠 센 것이다. 실제로는 모니터링 시스템의 버전별 지표를 쓴다.
-- GitHub에서 보려면 `demo/bad-release`를 PR로 올려 머지한다. `deploy-production` job이 canary 단계에서 실패하고 `production` 태그는 움직이지 않는다. 그 뒤 revert PR로 정리한다.
+
+## GitHub에서 실습 — `demo/ep3-bad-release`
+
+로컬 시연 4와 같은 변경을 파이프라인으로 내보낸다.
+
+```bash
+gh pr create --base main --head demo/ep3-bad-release --fill
+gh pr checks --watch
+gh pr merge demo/ep3-bad-release --squash
+gh run watch
+```
+
+- `test` 통과: 단위 테스트는 바뀐 계산을 검증하고, API 테스트는 일반 배송만 주문한다.
+- `deploy-staging` 통과: smoke test도 일반 배송 주문 하나만 넣어 본다.
+- `deploy-production`: 승인 후 "Deploy (canary)" step에서 `canary 10% — 지표 확인` 표에 새 버전 에러율이 찍히고 `판정: 중단`. job은 실패하고 "production 태그 이동" step은 실행되지 않는다.
+
+테스트, staging, 사람의 승인까지 통과한 변경을 마지막에 지표가 잡았다. 정리:
+
+```bash
+git switch main && git pull
+git revert --no-edit HEAD && git push
+```

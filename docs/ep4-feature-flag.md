@@ -110,6 +110,49 @@ mv app/web.py.bak app/web.py
 
 "코드에서 쓰는데 flags.json에 없다"와 "코드에서 쓰지 않는다"가 함께 나온다.
 
+## GitHub에서 실습 — `demo/ep4-unregistered-flag`
+
+배송 조회 링크를 새 플래그 `show_tracking_link` 뒤에 숨겨 내보내려는 PR이다. 코드에서는 쓰는데 `flags.json`에 등록하지 않았다.
+
+```bash
+git diff main demo/ep4-unregistered-flag
+gh pr create --base main --head demo/ep4-unregistered-flag --fill
+gh pr checks --watch
+```
+
+`test`의 "Feature flag 검사" step에서 멈춘다: `show_tracking_link: 코드에서 쓰는데 flags.json에 없다`. 담당자도 만료일도 없는 플래그는 파이프라인에 들어오지 못한다.
+
+플래그를 등록하는 커밋을 더한다. `flags.json`의 `show_estimated_delivery` 항목 뒤에 추가한다.
+
+```bash
+git switch demo/ep4-unregistered-flag
+```
+
+```json
+  "show_tracking_link": {
+    "description": "주문 완료 화면에 배송 조회 링크를 표시한다",
+    "owner": "@Joon",
+    "created": "2026-11-16",
+    "expires": "2027-01-31",
+    "default": false
+  }
+```
+
+```bash
+python3 scripts/check_flags.py
+git commit -am "chore: show_tracking_link 플래그 등록" && git push
+gh pr checks --watch
+```
+
+이제 통과한다. 머지하면 코드는 production까지 나가지만 기본값이 off라 사용자에게는 아무것도 보이지 않는다. 배포와 출시가 떨어진 것이다.
+
+```bash
+gh pr merge demo/ep4-unregistered-flag --squash
+git switch main && git pull
+```
+
+다음 편 실습을 위해 확인 후 `git revert --no-edit HEAD && git push`로 되돌려 둔다.
+
 ## 짚을 점
 
 - 플래그가 가리는 것은 화면 표시뿐이다. 새 컬럼에 쓰는 일은 플래그와 무관하게 항상 한다. 그래야 플래그를 켰을 때 보여 줄 데이터가 이미 있다.

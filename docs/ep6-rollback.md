@@ -92,7 +92,7 @@ smoke test의 "주문 생성"에서 실패한다. v1.0.0은 `estimated_delivery_
 되돌린 뒤에는 고쳐서 다시 나간다. 고친 버전도 같은 파이프라인을 처음부터 통과한다.
 
 ```bash
-git switch -c hotfix demo/bad-release
+git switch -c hotfix demo/ep3-bad-release
 git revert --no-edit HEAD
 ./scripts/test.sh
 ./scripts/build.sh hotfix v1.3.1
@@ -103,7 +103,26 @@ git switch main && git branch -D hotfix
 
 이번에는 canary를 건너뛰지 않는다. 세 단계 모두 `판정: 진행`.
 
-## 시연 6 — GitHub Actions의 rollback
+## GitHub에서 실습 — `demo/ep6-wrong-date`
+
+예상 배송일의 월과 일이 뒤바뀌어 표시되는 변경이다(11월 19일 → "19월 11일"). 5xx가 나지 않으므로 테스트도 canary도 잡지 못한다.
+
+준비: `production-previous` 태그가 있어야 한다. production 배포가 두 번 이상 성공했으면 있다 (GHCR Packages 화면에서 확인).
+
+**1. 나쁜 버전이 production까지 나간다**
+
+```bash
+git diff main demo/ep6-wrong-date
+gh pr create --base main --head demo/ep6-wrong-date --fill
+gh pr merge demo/ep6-wrong-date --squash
+gh run watch
+```
+
+전 단계 통과. `production` 태그가 이 버전으로 옮겨진다.
+
+**2. rollback 워크플로로 되돌린다**
+
+"배송일이 이상하게 나온다"는 제보가 들어왔다. 원인을 찾기 전에 먼저 되돌린다.
 
 ```bash
 gh workflow run rollback.yml -f tag=production-previous
@@ -112,7 +131,22 @@ gh run watch
 
 - job이 하나다. test와 build가 없다.
 - `production` environment의 승인을 거친다.
-- 끝나면 `production` 태그가 되돌린 이미지를 가리킨다. GHCR의 Packages 화면에서 태그가 옮겨진 것을 보여 준다.
+- "되돌릴 이미지 확인" step이 태그를 digest로 고정한다.
+- 끝나면 `production` 태그가 직전 이미지를 가리킨다.
+
+플래그로도 막을 수 있었다. 이 기능은 `show_estimated_delivery` 뒤에 있으므로 플래그를 끄면 배포 없이 가려진다 (시연 1).
+
+**3. roll-forward로 main을 고친다**
+
+운영은 되돌렸지만 main에는 아직 나쁜 커밋이 있다. 이대로 두면 다음 배포에 다시 나간다.
+
+```bash
+git switch main && git pull
+git revert --no-edit HEAD && git push
+gh run watch
+```
+
+고친 버전도 같은 파이프라인을 처음부터 통과해 production에 나간다.
 
 ## 롤백이냐 roll-forward냐
 
