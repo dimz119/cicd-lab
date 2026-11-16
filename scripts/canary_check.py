@@ -24,6 +24,7 @@ def judge(
     error_margin: float,
     latency_factor: float,
     latency_floor_ms: float,
+    baseline_error_cap: float,
 ) -> list[str]:
     """기준을 넘은 항목을 돌려준다. 비어 있으면 통과다."""
     # 표본이 너무 적으면 "문제없음"이 아니라 "모름"이다.
@@ -32,6 +33,13 @@ def judge(
         return [f"canary 표본 부족: {canary.count}건 (최소 {min_samples}건)"]
 
     problems = []
+    # 기존 버전이 무너지고 있으면 비교 자체가 의미 없다.
+    # 새 버전을 내보내는 과정이 기존 버전을 깨뜨렸을 수 있다 (예: 호환되지 않는 DB 변경).
+    if baseline and baseline.error_rate > baseline_error_cap:
+        problems.append(
+            f"baseline 에러율 {baseline.error_rate:.1%} > 상한 {baseline_error_cap:.1%}"
+        )
+
     baseline_error_rate = baseline.error_rate if baseline else 0.0
     error_limit = baseline_error_rate + error_margin
     if canary.error_rate > error_limit:
@@ -58,6 +66,8 @@ def main() -> int:
     # p95는 baseline p95의 latency-factor 배까지 허용한다.
     parser.add_argument("--latency-factor", type=float, default=2.0)
     parser.add_argument("--latency-floor-ms", type=float, default=200.0)
+    # baseline 에러율이 이 값을 넘으면 canary가 멀쩡해도 중단한다.
+    parser.add_argument("--baseline-error-cap", type=float, default=0.05)
     args = parser.parse_args()
 
     stats = collect(args.url.rstrip("/"), args.requests)
@@ -72,6 +82,7 @@ def main() -> int:
         error_margin=args.error_margin,
         latency_factor=args.latency_factor,
         latency_floor_ms=args.latency_floor_ms,
+        baseline_error_cap=args.baseline_error_cap,
     )
     # 라우터가 직접 낸 오류(502 등)는 어느 색 탓인지 알 수 없다.
     # 이것도 진행을 멈출 이유다.

@@ -8,6 +8,19 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 
+# 가상환경을 켜지 않고 실행해도 되도록 .venv를 직접 쓴다. 없으면 만든다.
+if [ ! -x "$ROOT/.venv/bin/pytest" ] || [ ! -x "$ROOT/.venv/bin/ruff" ]; then
+  log ".venv 준비 (requirements-dev.txt)"
+  if command -v uv >/dev/null 2>&1; then
+    uv venv --quiet --allow-existing "$ROOT/.venv"
+    uv pip install --quiet --python "$ROOT/.venv/bin/python" -r requirements-dev.txt
+  else
+    python3 -m venv "$ROOT/.venv"
+    "$ROOT/.venv/bin/pip" install --quiet -r requirements-dev.txt
+  fi
+fi
+PATH="$ROOT/.venv/bin:$PATH"
+
 NAME="cicd-lab-test-db"
 PORT=5499
 
@@ -24,6 +37,6 @@ sleep 1
 log "ruff"
 ruff check .
 log "feature flag 검사"
-python3 scripts/check_flags.py
+python scripts/check_flags.py
 log "pytest"
 TEST_DATABASE_URL="postgresql://orders:test@localhost:$PORT/orders_test" REQUIRE_DB=1 pytest -q

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psycopg
 
-from app.config import load_settings
+from app.config import ConfigError, load_settings
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -119,7 +119,11 @@ def main(argv: list[str] | None = None) -> int:
     up_parser.add_argument("--allow-contract", action="store_true")
     args = parser.parse_args(argv)
 
-    database_url = load_settings().database_url
+    try:
+        database_url = load_settings().database_url
+    except ConfigError as error:
+        print(error, file=sys.stderr)
+        return 1
     try:
         if args.command == "status":
             status(database_url)
