@@ -11,4 +11,7 @@
 <p class="delivery">📦 예상 배송일: <strong>{{ estimated_delivery_date.strftime("%m월 %d일") }}</strong></p>
 {% endif %}
 <p><a href="{{ url_for('index') }}">다시 주문하기</a></p>
+{% if show_tracking %}
+<p><a href="https://tracking.example.com/orders/{{ order.id }}">배송 조회</a></p>
+{% endif %}
 {% endblock %}

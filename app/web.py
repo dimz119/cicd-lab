@@ -170,9 +170,12 @@ def create_app(settings: Settings | None = None) -> Flask:
             return jsonify(error="주문을 찾을 수 없다"), 404
         # 배포는 이미 됐고, 출시는 이 플래그가 결정한다.
         show_delivery = flags.is_enabled("show_estimated_delivery", order["user_id"])
+        # 배송 조회는 아직 준비 중이라 플래그 뒤에 숨겨서 내보낸다.
+        show_tracking = flags.is_enabled("show_tracking_link", order["user_id"])
         return render_template(
             "complete.html",
             order=order,
+            show_tracking=show_tracking,
             estimated_delivery_date=order["estimated_delivery_date"] if show_delivery else None,
         )
 
