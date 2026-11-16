@@ -122,7 +122,7 @@ gh pr checks --watch
 
 `test`의 "Feature flag 검사" step에서 멈춘다: `show_tracking_link: 코드에서 쓰는데 flags.json에 없다`. 담당자도 만료일도 없는 플래그는 파이프라인에 들어오지 못한다.
 
-플래그를 등록하는 커밋을 더한다. `flags.json`의 `show_estimated_delivery` 항목 뒤에 추가한다.
+플래그를 등록하는 커밋을 더한다. `flags.json`의 `show_estimated_delivery` 항목 닫는 `}` 뒤에 쉼표를 붙이고 아래 항목을 추가한다.
 
 ```bash
 git switch demo/ep4-unregistered-flag
