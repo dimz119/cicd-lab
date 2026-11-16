@@ -23,6 +23,7 @@ class Settings:
     database_url: str
     log_level: str
     payment_api_url: str
+    support_email: str
     flag_cache_ttl_seconds: float
     # 빌드할 때 이미지에 박히는 값.
     app_version: str
@@ -45,6 +46,7 @@ def load_settings(environ: Mapping[str, str] = os.environ) -> Settings:
 
     database_url = required("DATABASE_URL")
     payment_api_url = required("PAYMENT_API_URL")
+    support_email = required("SUPPORT_EMAIL")
 
     log_level = environ.get("LOG_LEVEL", "INFO").upper()
     if log_level not in VALID_LOG_LEVELS:
@@ -67,6 +69,7 @@ def load_settings(environ: Mapping[str, str] = os.environ) -> Settings:
         database_url=database_url,
         log_level=log_level,
         payment_api_url=payment_api_url,
+        support_email=support_email,
         flag_cache_ttl_seconds=ttl,
         app_version=environ.get("APP_VERSION", "dev"),
         app_color=environ.get("APP_COLOR", "none"),

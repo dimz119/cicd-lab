@@ -6,6 +6,7 @@ VALID = {
     "APP_ENV": "staging",
     "DATABASE_URL": "postgresql://orders:pw@db:5432/orders",
     "PAYMENT_API_URL": "https://sandbox.pay.example.com",
+    "SUPPORT_EMAIL": "support-test@bookstore.example.com",
 }
 
 
@@ -26,6 +27,7 @@ def test_reports_every_missing_value_at_once():
     assert "APP_ENV" in message
     assert "DATABASE_URL" in message
     assert "PAYMENT_API_URL" in message
+    assert "SUPPORT_EMAIL" in message
 
 
 @pytest.mark.parametrize(
