@@ -23,7 +23,6 @@
 </head>
 <body>
   {% block content %}{% endblock %}
-  <p>문의: <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a></p>
   <footer>
     env={{ settings.app_env }} · version={{ settings.app_version }} ·
     <span class="color color-{{ settings.app_color }}">{{ settings.app_color }}</span>

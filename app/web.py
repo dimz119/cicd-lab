@@ -130,7 +130,6 @@ def create_app(settings: Settings | None = None) -> Flask:
             color=settings.app_color,
             log_level=settings.log_level,
             payment_api_url=settings.payment_api_url,
-            support_email=settings.support_email,
             flag_cache_ttl_seconds=settings.flag_cache_ttl_seconds,
         )
 
