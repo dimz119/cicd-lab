@@ -33,7 +33,6 @@ def settings(database_url: str) -> Settings:
         database_url=database_url,
         log_level="WARNING",
         payment_api_url="https://sandbox.pay.example.com",
-        support_email="support-test@bookstore.example.com",
         flag_cache_ttl_seconds=0,
         app_version="test",
         app_color="none",
